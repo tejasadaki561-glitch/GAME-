@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temple Runner JS</title>
+    <style>
+        /* Internal CSS */
+        body {
+            margin: 0;
+            background: #1a1a1a;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-ui {
+            position: absolute;
+            top: 20px;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        #canvas-container {
+            border: 5px solid #444;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            background: #000;
+        }
+
+        .controls {
+            margin-top: 15px;
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        #retry-btn {
+            display: none;
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #e67e22;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-ui">
+        <h1 id="status">TEMPLE RUNNER</h1>
+        <div style="font-size: 2rem;">Score: <span id="score">0</span></div>
+        <button id="retry-btn" onclick="resetGame()">PLAY AGAIN</button>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+    </div>
+
+    <div class="controls">Use <b>LEFT</b> and <b>RIGHT</b> Arrows to Dodge</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const retryBtn = document.getElementById('retry-btn');
+        const statusEl = document.getElementById('status');
+
+        // Game Constants
+        let score = 0;
+        let gameActive = true;
+        let speed = 5;
+        let playerLane = 1; // 0: Left, 1: Middle, 2: Right
+        let obstacles = [];
+        let frame = 0;
+
+        const lanes = [100, 200, 300]; // Lane X centers
+
+        // Player Object
+        const player = {
+            width: 40,
+            height: 40,
+            color: '#e67e22'
+        };
+
+        function drawRoad() {
+            ctx.fillStyle = '#333';
+            // Perspective road shape
+            ctx.beginPath();
+            ctx.moveTo(150, 0);   // Horizon Left
+            ctx.lineTo(250, 0);   // Horizon Right
+            ctx.lineTo(400, 600); // Bottom Right
+            ctx.lineTo(0, 600);   // Bottom Left
+            ctx.fill();
+
+            // Lane markers
+            ctx.strokeStyle = '#555';
+            ctx.setLineDash([20, 20]);
+            ctx.beginPath();
+            ctx.moveTo(183, 0); ctx.lineTo(133, 600);
+            ctx.moveTo(216, 0); ctx.lineTo(266, 600);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function createObstacle() {
+            if (frame % 60 === 0) {
+                const lane = Math.floor(Math.random() * 3);
+                obstacles.push({
+                    lane: lane,
+                    z: 0, // Distance from horizon
+                    width: 20,
+                    height: 10
+                });
+            }
+        }
+
+        function updateObstacles() {
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let o = obstacles[i];
+                o.z += speed;
+
+                // Project 3D to 2D
+                // As z increases, size increases and y moves down
+                let scale = o.z / 600;
+                let xCenter = lanes[o.lane];
+                
+                // Adjust x based on perspective
+                let xOffset = (xCenter - 200) * scale;
+                let drawX = (200 + xOffset) - (o.width * scale * 2) / 2;
+                let drawY = o.z;
+                let drawW = 40 * (o.z / 300);
+                let drawH = 20 * (o.z / 300);
+
+                // Draw Obstacle (Fire/Wall)
+                ctx.fillStyle = '#ff4757';
+                ctx.fillRect(drawX, drawY, drawW, drawH);
+
+                // Collision Detection
+                if (o.z > 500 && o.z < 560 && o.lane === playerLane) {
+                    gameOver();
+                }
+
+                // Remove off-screen
+                if (o.z > 600) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    scoreEl.innerText = score;
+                    speed += 0.1; // Increase difficulty
+                }
+            }
+        }
+
+        function drawPlayer() {
+            // Player visual follows lane
+            let targetX = lanes[playerLane] - player.width / 2;
+            ctx.fillStyle = player.color;
+            // Draw player with a simple shadow
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "orange";
+            ctx.fillRect(targetX, 520, player.width, player.height);
+            ctx.shadowBlur = 0;
+        }
+
+        function gameOver() {
+            gameActive = false;
+            statusEl.innerText = "CRASHED!";
+            statusEl.style.color = "red";
+            retryBtn.style.display = "block";
+        }
+
+        function resetGame() {
+            score = 0;
+            speed = 5;
+            playerLane = 1;
+            obstacles = [];
+            gameActive = true;
+            scoreEl.innerText = "0";
+            statusEl.innerText = "TEMPLE RUNNER";
+            statusEl.style.color = "white";
+            retryBtn.style.display = "none";
+            animate();
+        }
+
+        function animate() {
+            if (!gameActive) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawRoad();
+            createObstacle();
+            updateObstacles();
+            drawPlayer();
+
+            frame++;
+            requestAnimationFrame(animate);
+        }
+
+        // Controls
+        window.addEventListener('keydown', (e) => {
+            if (e.key === "ArrowLeft" && playerLane > 0) playerLane--;
+            if (e.key === "ArrowRight" && playerLane < 2) playerLane++;
+        });
+
+        animate();
+    </script>
+</body>
+</html>
